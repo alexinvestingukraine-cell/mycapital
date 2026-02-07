@@ -1,61 +1,51 @@
-import { Router } from "express";
-import bcrypt from "bcrypt";
+import { Router, Request, Response } from "express";
 import { prisma } from "../prisma";
 import { authMiddleware } from "../middleware/auth";
 
 const router = Router();
 
 /**
- * POST /users — регистрация
+ * GET /users/me
+ * Получить текущего пользователя
  */
-router.post("/", async (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password required" });
+router.get(
+  "/me",
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    return res.json({
+      user: req.user,
+    });
   }
-
-  const existing = await prisma.user.findUnique({
-    where: { email },
-  });
-
-  if (existing) {
-    return res.status(409).json({ error: "User already exists" });
-  }
-
-  const passwordHash = await bcrypt.hash(password, 10);
-
-  const user = await prisma.user.create({
-    data: {
-      email,
-      passwordHash,
-    },
-    select: {
-      id: true,
-      email: true,
-      createdAt: true,
-    },
-  });
-
-  res.status(201).json(user);
-});
+);
 
 /**
- * GET /users — ТОЛЬКО С ТОКЕНОМ
+ * PUT /users/me
+ * Обновить профиль (email)
  */
-router.get("/", authMiddleware, async (_req, res) => {
-  const users = await prisma.user.findMany({
-    select: {
-      id: true,
-      email: true,
-      createdAt: true,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+router.put(
+  "/me",
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    const { email } = req.body;
 
-  res.json(users);
-});
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { email },
+      select: {
+        id: true,
+        email: true,
+        createdAt: true,
+      },
+    });
+
+    return res.json({
+      user: updatedUser,
+    });
+  }
+);
 
 export default router;
